@@ -112,19 +112,16 @@ class HuggingFacePaperScraper:
         return result
 
 if __name__ == "__main__":
-    paper_id = "2604.22748" 
+    test_papers = ["2604.22748", "2604.16353", "2604.21518"] 
     
-    scraper = HuggingFacePaperScraper(paper_id=paper_id)
-    sonuc = scraper.execute()
-    
-    if sonuc is None:
-        print("Bağlantı kurulamadı veya linkler yok.")
-    else:
-        print("İşlem Başarılı! Çıktılar:")
-        for key, value in sonuc.items():
-            if isinstance(value, dict):
-                print(f"{key}:")
-                for k, v in value.items():
-                    print(f"  - {k}: {v}")
-            else:
-                print(f"{key}: {value}")
+    for paper_id in test_papers:
+        print(f"\n--- {paper_id} için işlem başlatılıyor ---")
+        scraper = HuggingFacePaperScraper(paper_id=paper_id)
+        sonuc = scraper.execute()
+        
+        if sonuc is None:
+            print(f"[{paper_id}] Bağlantı kurulamadı veya linkler yok.")
+        else:
+            print(f"[{paper_id}] İşlem Başarılı! İndirilen dosyalar:")
+            for k, v in sonuc["downloaded_files"].items():
+                print(f"  - {k}: {v}")
