@@ -2,7 +2,6 @@ import os
 import requests
 from bs4 import BeautifulSoup
 from typing import Dict, Optional, Any
-import re
 
 class HuggingFacePaperScraper:
     
@@ -40,12 +39,18 @@ class HuggingFacePaperScraper:
                 return None
 
             if response.status_code == 200:
+                is_video = any(ext in filename.lower() for ext in ['.mp4', '.avi', '.webm'])
+                dynamic_chunk_size = 1024 * 1024 if is_video else 8192
+
                 with open(filepath, 'wb') as f:
-                    for chunk in response.iter_content(chunk_size=8192):
-                        f.write(chunk)
+                    for chunk in response.iter_content(chunk_size=dynamic_chunk_size):
+                        if chunk:
+                            f.write(chunk)
                 return filepath
             return None
         except requests.RequestException:
+            if os.path.exists(filepath):
+                os.remove(filepath)
             return None
 
     def _extract_links_from_dom(self, soup: BeautifulSoup) -> Dict[str, Optional[str]]:
@@ -56,7 +61,6 @@ class HuggingFacePaperScraper:
             "video_url": None
         }
 
-        # 1. Eski yöntem: Önce <a> (link) etiketlerini tara
         for a_tag in soup.find_all('a', href=True):
             href = a_tag['href']
             text = a_tag.get_text().lower()
@@ -70,17 +74,17 @@ class HuggingFacePaperScraper:
             elif "project" in text or "project page" in text:
                 links["project_url"] = href
                 
-            elif any(v in href.lower() for v in [".mp4", "youtube.com/watch", "youtu.be", "vimeo.com"]):
+            elif any(v in href.lower() for v in [".mp4", ".avi", ".webm"]):
                 links["video_url"] = href
 
         if not links["video_url"]:
             for video_tag in soup.find_all(['video', 'source']):
                 src = video_tag.get('src')
-                if src and ".mp4" in src.lower():
+                if src and any(ext in src.lower() for ext in [".mp4", ".avi", ".webm"]):
                     if src.startswith('/'):
                         src = f"https://huggingface.co{src}"
                     links["video_url"] = src
-                    break
+                    break 
 
         if not links["arxiv_url"]:
              links["arxiv_url"] = f"https://arxiv.org/abs/{self.paper_id}"
@@ -100,12 +104,12 @@ class HuggingFacePaperScraper:
 
         targz_url = f"https://arxiv.org/e-print/{self.paper_id}"
         targz_path = self._download_file(targz_url, f"{self.paper_id}.tar.gz")
-        
+
         video_path = None
         if extracted_links["video_url"]:
             clean_video_url = extracted_links["video_url"].split('#')[0].split('?')[0]
             
-            if clean_video_url.endswith(".mp4"):
+            if clean_video_url.endswith((".mp4", ".avi", ".webm")):
                 video_name = clean_video_url.split("/")[-1]
                 video_path = self._download_file(clean_video_url, video_name)
             
@@ -130,13 +134,13 @@ if __name__ == "__main__":
     test_papers = ["2605.02881"] 
     
     for paper_id in test_papers:
-        print(f"\n--- {paper_id} için işlem başlatılıyor ---")
+        print(f"\n--- {paper_id} LIVE DOWNLOAD is starting. ---")
         scraper = HuggingFacePaperScraper(paper_id=paper_id)
         sonuc = scraper.execute()
         
         if sonuc is None:
-            print(f"[{paper_id}] Bağlantı kurulamadı veya linkler yok.")
+            print(f"[{paper_id}] Connection could not be established or the links are missing.")
         else:
-            print(f"[{paper_id}] İşlem Başarılı! İndirilen dosyalar:")
+            print(f"[{paper_id}] Operation successful! Downloaded files:")
             for k, v in sonuc["downloaded_files"].items():
                 print(f"  - {k}: {v}")
