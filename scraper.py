@@ -56,6 +56,7 @@ class HuggingFacePaperScraper:
             "video_url": None
         }
 
+        # 1. Eski yöntem: Önce <a> (link) etiketlerini tara
         for a_tag in soup.find_all('a', href=True):
             href = a_tag['href']
             text = a_tag.get_text().lower()
@@ -71,6 +72,15 @@ class HuggingFacePaperScraper:
                 
             elif any(v in href.lower() for v in [".mp4", "youtube.com/watch", "youtu.be", "vimeo.com"]):
                 links["video_url"] = href
+
+        if not links["video_url"]:
+            for video_tag in soup.find_all(['video', 'source']):
+                src = video_tag.get('src')
+                if src and ".mp4" in src.lower():
+                    if src.startswith('/'):
+                        src = f"https://huggingface.co{src}"
+                    links["video_url"] = src
+                    break
 
         if not links["arxiv_url"]:
              links["arxiv_url"] = f"https://arxiv.org/abs/{self.paper_id}"
@@ -90,11 +100,16 @@ class HuggingFacePaperScraper:
 
         targz_url = f"https://arxiv.org/e-print/{self.paper_id}"
         targz_path = self._download_file(targz_url, f"{self.paper_id}.tar.gz")
-
+        
         video_path = None
-        if extracted_links["video_url"] and extracted_links["video_url"].endswith(".mp4"):
-            video_name = extracted_links["video_url"].split("/")[-1]
-            video_path = self._download_file(extracted_links["video_url"], video_name)
+        if extracted_links["video_url"]:
+            clean_video_url = extracted_links["video_url"].split('#')[0].split('?')[0]
+            
+            if clean_video_url.endswith(".mp4"):
+                video_name = clean_video_url.split("/")[-1]
+                video_path = self._download_file(clean_video_url, video_name)
+            
+            extracted_links["video_url"] = clean_video_url
 
         result = {
             "paper_id": self.paper_id,
@@ -112,7 +127,7 @@ class HuggingFacePaperScraper:
         return result
 
 if __name__ == "__main__":
-    test_papers = ["2604.22748", "2604.16353", "2604.21518"] 
+    test_papers = ["2605.02881"] 
     
     for paper_id in test_papers:
         print(f"\n--- {paper_id} için işlem başlatılıyor ---")
